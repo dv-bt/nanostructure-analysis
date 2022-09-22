@@ -1,6 +1,9 @@
 # .DS_Store files
 *.DS_Store
 
+# Editor files
+.vscode
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
