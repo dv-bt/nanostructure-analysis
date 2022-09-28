@@ -1,5 +1,5 @@
-# image-processing-scripts
-A collection of practice image processing scripts, using SEM pictures as test images.
+# nanostructure-analysis
+A collection of image processing scripts to analyse SEM images of nanostructures.
 
 ## Usage
 
