@@ -5,6 +5,8 @@ operations.
 Functions
 ---------
 trim_infoline : remove image infoline and detect pixel size
+baseline_detect : detect baseline of nanostructures
+crop_rotate : rotate image and crop unused regions
 """
 
 import re
@@ -105,7 +107,9 @@ def baseline_detect(image, sigma=3, num_pieces=2) -> tuple[float, float]:
 
     return baseline.slope, baseline.intercept
 
-def crop_rotate(image, angle, trim_baseline=True) -> tuple[np.array, float]:
+def crop_rotate(
+    image, angle, trim_baseline=True, baseline_val=None
+) -> tuple[np.array, float]:
     """
     Rotate image, cropping it to remove empty pixels. Image scale is preserved.
 
@@ -118,12 +122,15 @@ def crop_rotate(image, angle, trim_baseline=True) -> tuple[np.array, float]:
     trim_baseline : bool
         Flag for cropping away everything below the detected baseline. Useful
         to simplify analysis. (default=True).
+    baseline_val = None or float
+        Position of the horizontal final baseline.
+
 
     Returns
     -------
     image_crop : np.array
         Rotated and cropped image.
-    baseline_intercept : float
+    baseline_val : float
         Intercept of the (horizontal) baseline.
     """
 
@@ -137,9 +144,9 @@ def crop_rotate(image, angle, trim_baseline=True) -> tuple[np.array, float]:
         )
     )
 
-    _, baseline_intercept = baseline_detect(image_crop, num_pieces=1)
-
     if trim_baseline:
-        image_crop = image_crop[:round(baseline_intercept), :]
+        if not baseline_val:
+            _, baseline_val = baseline_detect(image_crop, num_pieces=1)
+        image_crop = image_crop[:round(baseline_val), :]
 
-    return image_crop, baseline_intercept
+    return image_crop, baseline_val
