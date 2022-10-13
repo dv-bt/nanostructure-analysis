@@ -18,7 +18,7 @@ from skimage import feature
 from scipy import signal
 from scipy.stats import linregress
 
-def trim_infoline(image, detect_px_size=True) -> tuple[np.array, float]:
+def trim_infoline(image, detect_px_size=True) -> tuple[np.ndarray, float]:
     """
     Trim an image of its infoline. Optionally, detect image pixel size by OCR,
     using Tesseract.
@@ -76,10 +76,10 @@ def baseline_detect(image, sigma=3, num_pieces=2) -> tuple[float, float]:
 
     Returns
     -------
-    slope : float
-        Slope of the detected baseline
+    angle : float
+        Baseline angle, in degrees.
     intercept : float
-        Intercept of the detected baseline
+        Intercept of the detected baseline.
     """
 
     edges = feature.canny(image, sigma=sigma)
@@ -105,11 +105,14 @@ def baseline_detect(image, sigma=3, num_pieces=2) -> tuple[float, float]:
 
     baseline = linregress(x_baseline, y_baseline)
 
-    return baseline.slope, baseline.intercept
+    angle = np.rad2deg(np.arctan(baseline.slope))  # type: ignore
+    intercept = baseline.intercept  # type: ignore
+
+    return angle, intercept
 
 def crop_rotate(
-    image, angle, trim_baseline=True, baseline_val=None
-) -> tuple[np.array, float]:
+    image, angle, baseline_val=None, trim_baseline=True,
+) -> tuple[np.ndarray, float]:
     """
     Rotate image, cropping it to remove empty pixels. Image scale is preserved.
 
@@ -119,18 +122,18 @@ def crop_rotate(
         Image to be rotated.
     angle : float
         Rotation angle, defined as counter-clockwise from the x-axis.
+    baseline_val = None or float
+        Position of the horizontal final baseline.
     trim_baseline : bool
         Flag for cropping away everything below the detected baseline. Useful
         to simplify analysis. (default=True).
-    baseline_val = None or float
-        Position of the horizontal final baseline.
 
 
     Returns
     -------
-    image_crop : np.array
+    image_crop : np.ndarray
         Rotated and cropped image.
-    baseline_val : float
+    baseline_val : float or None
         Intercept of the (horizontal) baseline.
     """
 
@@ -144,9 +147,10 @@ def crop_rotate(
         )
     )
 
+    if not baseline_val:
+        _, baseline_val = baseline_detect(image_crop, num_pieces=1)
+
     if trim_baseline:
-        if not baseline_val:
-            _, baseline_val = baseline_detect(image_crop, num_pieces=1)
         image_crop = image_crop[:round(baseline_val), :]
 
     return image_crop, baseline_val
