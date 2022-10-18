@@ -91,8 +91,8 @@ def baseline_detect(image, sigma=3, num_pieces=2) -> tuple[float, float]:
 
     for i in range(num_pieces):
         edges_mean = signal.medfilt(
-            np.mean(edges_split[i], axis=1), kernel_size=9
-        )
+            np.mean(edges_split[i][:-1,:], axis=1), kernel_size=9
+        )  # Remove last row to avoid spurious gradients
         edges_gradient = np.gradient(edges_mean)
         y_baseline.append(np.argmax(abs(edges_gradient)))
         x_baseline.append(
