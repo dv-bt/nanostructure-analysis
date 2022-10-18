@@ -268,4 +268,6 @@ def rod_analysis(data, px_size, baseline_angle, baseline_val) -> pd.DataFrame:
     results['diameter'] = results.dist_transform * 2 * px_size
     results['volume'] = __rod_volume(results)
 
+    results = results.drop(['px_index'], axis=1)
+
     return results
