@@ -19,7 +19,7 @@ from skimage import draw
 from skimage import morphology
 from skimage.util import img_as_bool
 import skan
-import preprocess
+from . import preprocess
 
 def import_segmentation(folder_path) -> pd.DataFrame:
     """
@@ -237,7 +237,7 @@ def rod_analysis(data, px_size, baseline_angle, baseline_val) -> pd.DataFrame:
     )
     drawing[polygon] = 1
     drawing, _ = preprocess.crop_rotate(
-        drawing, angle=baseline_angle, baseline_val=baseline_val
+        drawing, angle=baseline_angle, baseline_intercept=baseline_val
     )
 
     distance = ndimage.distance_transform_edt(drawing)

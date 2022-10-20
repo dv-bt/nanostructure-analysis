@@ -111,7 +111,7 @@ def baseline_detect(image, sigma=3, num_pieces=2) -> tuple[float, float]:
     return angle, intercept
 
 def crop_rotate(
-    image, angle, baseline_val=None, trim_baseline=True,
+    image, angle, baseline_intercept, trim_baseline=True,
 ) -> tuple[np.ndarray, float]:
     """
     Rotate image, cropping it to remove empty pixels. Image scale is preserved.
@@ -122,8 +122,8 @@ def crop_rotate(
         Image to be rotated.
     angle : float
         Rotation angle, defined as counter-clockwise from the x-axis.
-    baseline_val = None or float
-        Position of the horizontal final baseline.
+    baseline_intercept = float
+        Basline intercept on the original image-
     trim_baseline : bool
         Flag for cropping away everything below the detected baseline. Useful
         to simplify analysis. (default=True).
@@ -134,7 +134,7 @@ def crop_rotate(
     image_crop : np.ndarray
         Rotated and cropped image.
     baseline_val : float or None
-        Intercept of the (horizontal) baseline.
+        Intercept of the (horizontal) baseline on the transformed image.
     """
 
     image_rot = transform.rotate(image, angle=angle, resize=True)
@@ -147,10 +147,13 @@ def crop_rotate(
         )
     )
 
-    if not baseline_val:
-        _, baseline_val = baseline_detect(image_crop, num_pieces=1)
+    baseline_val = round(
+        baseline_intercept * np.cos(np.deg2rad(abs(angle))) + 0.5
+    )
+    if angle < 0:
+        baseline_val -= height_crop
 
     if trim_baseline:
-        image_crop = image_crop[:round(baseline_val), :]
+        image_crop = image_crop[:round(baseline_intercept), :]
 
     return image_crop, baseline_val
