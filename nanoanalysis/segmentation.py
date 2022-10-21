@@ -11,6 +11,7 @@ Functions
 import os
 import glob
 import json
+import xml.etree.ElementTree as ET
 import numpy as np
 import pandas as pd
 from scipy.stats import linregress
@@ -21,15 +22,19 @@ from skimage.util import img_as_bool
 import skan
 from . import preprocess
 
-def import_segmentation(folder_path) -> pd.DataFrame:
+def import_segmentation(folder_path, database_type='CVAT') -> pd.DataFrame:
     """
-    Import segmentation mask stored in JSON files following the the COCO 1.0
-    format.
+    Import segmentation mask stored XML or JSON databases.
 
     Parameters
     ----------
     folder_path : str
-        Path to the folder containing the JSON databases.
+        Path to the folder containing the files.
+    database_type : str
+        Format of segmentation mask database. Currently supported values:
+        - 'COCO': COCO 1.0 JSON
+        - 'CVAT': CVAT for images 1.1
+        (default='CVAT')
 
     Returns
     -------
@@ -37,52 +42,117 @@ def import_segmentation(folder_path) -> pd.DataFrame:
         Pandas dataframe with the segmentation masks.
     """
 
-    def __reshape_coordinates(coords) -> dict:
-        """ Reshape coordinates from flat list in COCO JSON """
-
-        coords_array = np.array(coords).reshape(int(len(coords) / 2), 2)
-        coords_dict = {
-            'x': coords_array[:, 0],
-            'y': coords_array[:, 1]
-        }
-
-        return coords_dict
+    # Check function arguments
+    if database_type not in {'COCO', 'CVAT'}:
+        raise ValueError(
+            'Value of the database_type argument is not valid.'
+            'Allowed arguments: "CVAT", "COCO"'
+        )
 
     data_list = []
-    for file_path in glob.glob(folder_path + os.sep + '*.json'):
-        with open(file_path, 'r', encoding='utf8') as file:
-            data_json = json.load(file)
 
-        images = pd.json_normalize(data_json['images'])
-        images = images.rename(columns={'id': 'image_id'})
-        images = images.drop(
-            ['license', 'flickr_url', 'coco_url', 'date_captured'],
-            axis=1
-        )
+    search_path = folder_path + os.sep + '*.' + (
+        'json' if database_type=='COCO' else 'xml'
+    )
 
-        annotations = pd.json_normalize(data_json['annotations'])
-        annotations['segmentation'] = (
-            annotations
-            .segmentation
-            .apply(lambda x: __reshape_coordinates(x[0]))
-        )
-        annotations = annotations.drop(
-            ['iscrowd', 'area', 'attributes.occluded', 'bbox'],
-            axis=1
-        )
-
+    for file_path in glob.glob(search_path):
         data_list.append(
-            pd.merge(images, annotations)
-            .drop(['image_id', 'id'], axis=1)
+            __read_coco(file_path) if database_type=='COCO'
+            else __read_cvat(file_path)
         )
 
     data = pd.concat(data_list, ignore_index=True)
+
+    data['segmentation'] = (
+        data
+        .segmentation
+        .apply(__reshape_coordinates)
+    )
+
     data['instance_id'] = 1
     data['instance_id'] = data.groupby(
-        ["file_name", "category_id"]
+        ["file_name", "label"]
     ).instance_id.cumsum()
+    data = data.astype({'width': int, 'height': int})
 
     return data
+
+def __reshape_coordinates(coords) -> dict:
+    """ Reshape coordinates from flat list """
+
+    coords_array = np.array(coords).reshape(int(len(coords) / 2), 2)
+    coords_dict = {
+        'x': coords_array[:, 0],
+        'y': coords_array[:, 1]
+    }
+
+    return coords_dict
+
+def __read_coco(file_path) -> pd.DataFrame:
+    """ Read COCO 1.0 JSON annotation file """
+    with open(file_path, 'r', encoding='utf8') as file:
+        data_json = json.load(file)
+
+    images = pd.json_normalize(data_json['images'])
+    images = images.rename(columns={'id': 'image_id'})
+    images = images.drop(
+        ['license', 'flickr_url', 'coco_url', 'date_captured'],
+        axis=1
+    )
+
+    categories = pd.json_normalize(data_json['categories'])
+    categories = categories.drop('supercategory', axis=1)
+    categories = categories.rename(
+        columns={'id': 'category_id', 'name': 'label'}
+    )
+
+    annotations = pd.json_normalize(data_json['annotations'])
+    annotations = annotations.drop(
+        ['iscrowd', 'area', 'attributes.occluded', 'bbox', 'id'],
+        axis=1
+    )
+    annotations = (
+        pd.merge(images, pd.merge(categories, annotations))
+        .drop(['image_id', 'category_id'], axis=1)
+    )
+
+    # Format segmentation vector
+    annotations['segmentation'] = (
+        annotations
+        .segmentation
+        .apply(lambda x: x[0])
+    )
+
+    return annotations
+
+def __read_cvat(file_path) -> pd.DataFrame:
+    """ Read CVAT for images 1.1 XML annotation file """
+
+    annotation_list = []
+
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+    for image in root.findall('image'):
+        for annotation in image:
+            annotation_list.append(
+                pd.DataFrame(annotation.attrib, index=[0])
+                .assign(**image.attrib)
+            )
+
+    annotations = (
+        pd.concat(annotation_list, ignore_index=True)
+        .drop(['occluded', 'source', 'z_order', 'id'], axis=1)
+        .rename(columns={'points': 'segmentation', 'name': 'file_name'})
+    )
+
+    # Format segmentation vector
+    annotations['segmentation'] = (
+        annotations
+        .segmentation
+        .apply(lambda x: np.fromstring(x.replace(';', ','), sep=','))
+    )
+
+    return annotations
 
 def __rod_height(data, drawing, px_size) -> pd.DataFrame:
     """
@@ -214,7 +284,9 @@ def __rod_volume(data):
 
     return data_calc.volume.cumsum().to_numpy()[::-1]
 
-def rod_analysis(data, px_size, baseline_angle, baseline_val) -> pd.DataFrame:
+def rod_analysis(
+    data, px_size, baseline_angle, baseline_intercept
+) -> pd.DataFrame:
     """
     Extract rod skeleton and diameter for each point along it.
 
@@ -237,12 +309,11 @@ def rod_analysis(data, px_size, baseline_angle, baseline_val) -> pd.DataFrame:
     )
     drawing[polygon] = 1
     drawing, _ = preprocess.crop_rotate(
-        drawing, angle=baseline_angle, baseline_intercept=baseline_val
+        drawing, angle=baseline_angle, baseline_intercept=baseline_intercept
     )
 
     distance = ndimage.distance_transform_edt(drawing)
     skeleton = img_as_bool(morphology.skeletonize(drawing, method='lee'))
-    # skeleton = morphology.medial_axis(drawing)
     skeleton_skan = skan.Skeleton(distance * skeleton)
 
     # Find main branch and merge when necessary
