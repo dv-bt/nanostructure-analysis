@@ -110,8 +110,23 @@ def baseline_detect(image, sigma=3, num_pieces=2) -> tuple[float, float]:
 
     return angle, intercept
 
+def baseline_import(data, label_name='Baseline') -> tuple[float, float]:
+    """
+    Import baseline from segmentation data
+    """
+    data = data.loc[data.label==label_name].iloc[0]
+
+    baseline = linregress(
+        data.segmentation['x'], data.segmentation['y']
+    )
+
+    angle = np.rad2deg(np.arctan(baseline.slope))  # type: ignore
+    intercept = baseline.intercept  # type: ignore
+
+    return angle, intercept
+
 def crop_rotate(
-    image, angle, baseline_intercept, trim_baseline=True,
+    image, angle, baseline_intercept, trim_baseline=True
 ) -> tuple[np.ndarray, float]:
     """
     Rotate image, cropping it to remove empty pixels. Image scale is preserved.

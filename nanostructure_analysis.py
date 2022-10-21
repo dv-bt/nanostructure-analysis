@@ -44,6 +44,8 @@ for image_name in tqdm(data.file_name.unique()):
     if args['new_files'] and exists(results_path):
         continue
 
+    data_image = data.query("file_name==@image_name")
+
     rod_list = []
 
     try:
@@ -58,8 +60,14 @@ for image_name in tqdm(data.file_name.unique()):
         # from formatted file name.
         image, px_size = preprocess.trim_infoline(image_read)
 
-        # Detect surface and correct for image tilt.
-        baseline_angle, baseline_intercept = preprocess.baseline_detect(image, num_pieces=2)
+        # Detect surface and correct for image tilt. Skip if baseline info is
+        # present in segmentation data and use that instead.
+        baseline_angle, baseline_intercept = (
+            preprocess.baseline_detect(image, num_pieces=2)
+            if not data_image.label.isin(['Baseline']).any()
+            else preprocess.baseline_import(data_image)
+        )
+
         image_rot, baseline_val = preprocess.crop_rotate(
             image, baseline_angle, baseline_intercept, trim_baseline=True
         )
@@ -69,10 +77,10 @@ for image_name in tqdm(data.file_name.unique()):
             ax.imshow(image_rot, cmap='gray')
             ax.set_title(image_name)
 
-        for i in data.query("file_name==@image_name").index:
+        for i in data_image.query("label!='Baseline'").index:
             rods = (
                 segmentation.rod_analysis(
-                    data.loc[i], px_size, baseline_angle, baseline_val
+                    data_image.loc[i], px_size, baseline_angle, baseline_val
                 )
                 .assign(**{'file_name': image_name})
             )
