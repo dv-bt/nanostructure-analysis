@@ -12,6 +12,7 @@ import os
 import glob
 import json
 import xml.etree.ElementTree as ET
+
 import numpy as np
 import pandas as pd
 from scipy.stats import linregress
@@ -20,9 +21,13 @@ from skimage import draw
 from skimage import morphology
 from skimage.util import img_as_bool
 import skan
+
 from . import preprocess
 
-def import_segmentation(folder_path, database_type='CVAT') -> pd.DataFrame:
+
+def import_segmentation(
+    folder_path: str, database_type: str = 'CVAT'
+) -> pd.DataFrame:
     """
     Import segmentation mask stored XML or JSON databases.
 
@@ -51,7 +56,10 @@ def import_segmentation(folder_path, database_type='CVAT') -> pd.DataFrame:
 
     data_list = []
 
-    search_path = folder_path + os.sep + '*.' + (
+    if not folder_path.endswith(os.sep):
+        folder_path += os.sep
+
+    search_path = folder_path + '*.' + (
         'json' if database_type=='COCO' else 'xml'
     )
 
@@ -77,7 +85,8 @@ def import_segmentation(folder_path, database_type='CVAT') -> pd.DataFrame:
 
     return data
 
-def __reshape_coordinates(coords) -> dict:
+
+def __reshape_coordinates(coords: list) -> dict:
     """ Reshape coordinates from flat list """
 
     coords_array = np.array(coords).reshape(int(len(coords) / 2), 2)
@@ -88,7 +97,8 @@ def __reshape_coordinates(coords) -> dict:
 
     return coords_dict
 
-def __read_coco(file_path) -> pd.DataFrame:
+
+def __read_coco(file_path: str) -> pd.DataFrame:
     """ Read COCO 1.0 JSON annotation file """
     with open(file_path, 'r', encoding='utf8') as file:
         data_json = json.load(file)
@@ -125,7 +135,8 @@ def __read_coco(file_path) -> pd.DataFrame:
 
     return annotations
 
-def __read_cvat(file_path) -> pd.DataFrame:
+
+def __read_cvat(file_path: str) -> pd.DataFrame:
     """ Read CVAT for images 1.1 XML annotation file """
 
     annotation_list = []
@@ -154,7 +165,10 @@ def __read_cvat(file_path) -> pd.DataFrame:
 
     return annotations
 
-def __rod_height(data, drawing, px_size) -> pd.DataFrame:
+
+def __rod_height(
+    data: pd.DataFrame, drawing: np.ndarray, px_size: float
+) -> pd.DataFrame:
     """
     Calculate the height of rods at each point along a given path, returning
     the input dataframe with the added data.
@@ -196,7 +210,11 @@ def __rod_height(data, drawing, px_size) -> pd.DataFrame:
 
     return data_out
 
-def __rod_bottom(data, drawing, fit_fraction=0.05, sigma=2):
+
+def __rod_bottom(
+    data: pd.DataFrame, drawing: np.ndarray,
+    fit_fraction: float = 0.05, sigma: float | int = 2
+) -> pd.DataFrame:
     """
     Extrapole rod bottom to baseline and remove spurious "roots"
     """
@@ -233,7 +251,10 @@ def __rod_bottom(data, drawing, fit_fraction=0.05, sigma=2):
 
     return data_out
 
-def __rod_tip(data, drawing, fit_fraction=0.08):
+
+def __rod_tip(
+    data: pd.DataFrame, drawing: np.ndarray, fit_fraction: float = 0.08
+) -> pd.DataFrame:
     """
     Extrapolate tip to contour.
     """
@@ -263,7 +284,8 @@ def __rod_tip(data, drawing, fit_fraction=0.08):
 
     return data_out
 
-def __rod_volume(data):
+
+def __rod_volume(data: pd.DataFrame) -> np.ndarray:
     """ Calculate rod volume by approximation as series of truncated cones """
 
     data_calc = data.copy()
@@ -284,8 +306,10 @@ def __rod_volume(data):
 
     return data_calc.volume.cumsum().to_numpy()[::-1]
 
+
 def rod_analysis(
-    data, px_size, baseline_angle, baseline_intercept
+    data: pd.DataFrame, px_size: float,
+    baseline_angle: float, baseline_intercept: float
 ) -> pd.DataFrame:
     """
     Extract rod skeleton and diameter for each point along it.
@@ -295,6 +319,12 @@ def rod_analysis(
     data : pd.DataFrame
         Pandas dataframe with rod data as formatted by import_segmentation.
         NOTE: data should contain information about a single rod.
+    px_size : float
+        Size of each pixel in nm.
+    baseline_angle : float
+        Angle of the surface baseline, in degrees.
+    baseline_intercept : float
+        Intercept of the surface baseline.
 
     Returns
     -------

@@ -1,15 +1,27 @@
 """
-This script analyses the shape of nanorods from SEM side-view images
+This script analyses the shape of nanorods from SEM side-view images.
+
+Arguments
+---------
+-p --plot_images
+    Plot reconstructed rods on original image
+-n --new_files
+    Only analyse not previously analyed images
+-v --verbose
+    Enable verbose output
 """
 
 from os.path import exists
 from glob import glob
+from pathlib import Path
 import argparse
+
 import pandas as pd
 from skimage import io
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+
 from nanoanalysis import preprocess
 from nanoanalysis import segmentation
 
@@ -33,14 +45,21 @@ ap.add_argument(
 )
 args = vars(ap.parse_args())
 
-data = segmentation.import_segmentation('Data/Segmentation-masks')
+# Script variables
+IMAGE_FOLDER = "Data/Images/"
+SEGMENTATION_FOLDER = "Data/Segmentation-masks/"
+RESULTS_FOLDER =  "Data/Results/"
+
+Path(RESULTS_FOLDER).mkdir(exist_ok=True)
+
+data = segmentation.import_segmentation(SEGMENTATION_FOLDER)
 
 for image_name in tqdm(data.file_name.unique()):
 
     if args['verbose']:
         print('Current image:', image_name)
 
-    results_path = "Data/Results/" + image_name.replace('tif', 'csv')
+    results_path = RESULTS_FOLDER + image_name.replace('tif', 'csv')
     if args['new_files'] and exists(results_path):
         continue
 
@@ -49,7 +68,7 @@ for image_name in tqdm(data.file_name.unique()):
     rod_list = []
 
     try:
-        image_path = glob("Data/Images/**/" + image_name)[0]
+        image_path = glob(IMAGE_FOLDER + "/**/" + image_name)[0]
 
         # Load image
         image_read = io.imread(image_path)

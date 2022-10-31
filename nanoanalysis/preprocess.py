@@ -6,11 +6,14 @@ Functions
 ---------
 trim_infoline : remove image infoline and detect pixel size
 baseline_detect : detect baseline of nanostructures
+baseline_import : import baseline from segmentation data
 crop_rotate : rotate image and crop unused regions
 """
 
 import re
+
 import numpy as np
+import pandas as pd
 import pytesseract
 from skimage import transform
 from skimage import util
@@ -18,7 +21,10 @@ from skimage import feature
 from scipy import signal
 from scipy.stats import linregress
 
-def trim_infoline(image, detect_px_size=True) -> tuple[np.ndarray, float]:
+
+def trim_infoline(
+    image: np.ndarray, detect_px_size: bool = True
+) -> tuple[np.ndarray, float]:
     """
     Trim an image of its infoline. Optionally, detect image pixel size by OCR,
     using Tesseract.
@@ -58,7 +64,10 @@ def trim_infoline(image, detect_px_size=True) -> tuple[np.ndarray, float]:
 
     return image_trim, px_size
 
-def baseline_detect(image, sigma=3, num_pieces=2) -> tuple[float, float]:
+
+def baseline_detect(
+    image: np.ndarray, sigma: float | int = 3, num_pieces: int = 2
+) -> tuple[float, float]:
     """
     Detect baseline of nanostructures using maximum of piecewise gradient of
     edges.
@@ -110,7 +119,10 @@ def baseline_detect(image, sigma=3, num_pieces=2) -> tuple[float, float]:
 
     return angle, intercept
 
-def baseline_import(data, label_name='Baseline') -> tuple[float, float]:
+
+def baseline_import(
+    data: pd.DataFrame, label_name: str = 'Baseline'
+) -> tuple[float, float]:
     """
     Import baseline from segmentation data
     """
@@ -125,8 +137,10 @@ def baseline_import(data, label_name='Baseline') -> tuple[float, float]:
 
     return angle, intercept
 
+
 def crop_rotate(
-    image, angle, baseline_intercept, trim_baseline=True
+    image: np.ndarray, angle: float, baseline_intercept: float,
+    trim_baseline: bool = True
 ) -> tuple[np.ndarray, float]:
     """
     Rotate image, cropping it to remove empty pixels. Image scale is preserved.
@@ -138,7 +152,7 @@ def crop_rotate(
     angle : float
         Rotation angle, defined as counter-clockwise from the x-axis.
     baseline_intercept = float
-        Basline intercept on the original image-
+        Basline intercept on the original image
     trim_baseline : bool
         Flag for cropping away everything below the detected baseline. Useful
         to simplify analysis. (default=True).
