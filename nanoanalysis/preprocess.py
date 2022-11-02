@@ -2,15 +2,20 @@
 This module contains functions used for image pre-processing and preliminary
 operations.
 
+Classes
+-------
+Baseline : the fitted surface baseline of an image
+
 Functions
 ---------
 trim_infoline : remove image infoline and detect pixel size
 baseline_detect : detect baseline of nanostructures
 baseline_import : import baseline from segmentation data
-crop_rotate : rotate image and crop unused regions
+straighten_image : straighten image using given baseline as reference
 """
 
 import re
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -20,6 +25,50 @@ from skimage import util
 from skimage import feature
 from scipy import signal
 from scipy.stats import linregress
+
+
+@dataclass
+class Baseline:
+    """
+    Perform a linear regression on baseline data and store the results in a
+    convenient form.
+
+    Arguments
+    ---------
+    x_data : np.ndarray
+        The x values to fit
+    y_data : np.ndarray
+        The y values to fit. It must have the same length of x_data
+
+    Attributes
+    ---------------------
+    slope : float
+        The baseline slope.
+    intercept : float
+        The baseline intercept.
+    angle : float
+        The baseline angle, in degrees.
+
+    Methods
+    -------
+    evaluate
+        Evaluate the baseline over an array representing the x-axis values.
+    """
+    slope: float
+    intercept: float
+    angle: float
+
+    def __init__(self, x_data: np.ndarray, y_data: np.ndarray) -> None:
+        """ Calculate regression and assign field values """
+        regression = linregress(x_data, y_data)
+        self.slope: float = regression.slope
+        self.intercept: float = regression.intercept
+        self.angle = np.rad2deg(np.arctan(self.slope))
+
+    def evaluate(self, x_array: np.ndarray) -> np.ndarray:
+        """ Return the baseline y values for a given x array """
+        y_array = self.slope * x_array + self.intercept
+        return y_array
 
 
 def trim_infoline(
@@ -67,7 +116,7 @@ def trim_infoline(
 
 def baseline_detect(
     image: np.ndarray, sigma: float | int = 3, num_pieces: int = 2
-) -> tuple[float, float]:
+) -> Baseline:
     """
     Detect baseline of nanostructures using maximum of piecewise gradient of
     edges.
@@ -85,10 +134,8 @@ def baseline_detect(
 
     Returns
     -------
-    angle : float
-        Baseline angle, in degrees.
-    intercept : float
-        Intercept of the detected baseline.
+    baseline : Baseline
+        The detected baseline, a instance of the Baseline class.
     """
 
     edges = feature.canny(image, sigma=sigma)
@@ -112,47 +159,37 @@ def baseline_detect(
         y_baseline.append(y_baseline[0])
         x_baseline.append(x_baseline[0] + 1)
 
-    baseline = linregress(x_baseline, y_baseline)
+    baseline = Baseline(x_baseline, y_baseline)
 
-    angle = np.rad2deg(np.arctan(baseline.slope))  # type: ignore
-    intercept = baseline.intercept  # type: ignore
-
-    return angle, intercept
+    return baseline
 
 
 def baseline_import(
     data: pd.DataFrame, label_name: str = 'Baseline'
-) -> tuple[float, float]:
+) -> Baseline:
     """
     Import baseline from segmentation data
     """
     data = data.loc[data.label==label_name].iloc[0]
 
-    baseline = linregress(
-        data.segmentation['x'], data.segmentation['y']
-    )
+    baseline = Baseline(data.segmentation['x'], data.segmentation['y'])
 
-    angle = np.rad2deg(np.arctan(baseline.slope))  # type: ignore
-    intercept = baseline.intercept  # type: ignore
-
-    return angle, intercept
+    return baseline
 
 
-def crop_rotate(
-    image: np.ndarray, angle: float, baseline_intercept: float,
-    trim_baseline: bool = True
+def straighten_image(
+    image: np.ndarray, baseline: Baseline, trim_baseline: bool = True
 ) -> tuple[np.ndarray, float]:
     """
-    Rotate image, cropping it to remove empty pixels. Image scale is preserved.
+    Rotate image so that the input surface baseline is a horizontal line.
+    The image is cropped to remove empty pixels, and its scale is preserved.
 
     Parameters
     ----------
     image : np.array
         Image to be rotated.
-    angle : float
-        Rotation angle, defined as counter-clockwise from the x-axis.
-    baseline_intercept = float
-        Basline intercept on the original image
+    baseline : Baseline
+        The baseline around which the image has to be rotated.
     trim_baseline : bool
         Flag for cropping away everything below the detected baseline. Useful
         to simplify analysis. (default=True).
@@ -162,9 +199,11 @@ def crop_rotate(
     -------
     image_crop : np.ndarray
         Rotated and cropped image.
-    baseline_val : float or None
+    baseline_val : float
         Intercept of the (horizontal) baseline on the transformed image.
     """
+
+    angle = baseline.angle
 
     image_rot = transform.rotate(image, angle=angle, resize=True)
     width_crop = round(image.shape[0] * np.sin(np.deg2rad(abs(angle))) + 0.5)
@@ -177,12 +216,12 @@ def crop_rotate(
     )
 
     baseline_val = round(
-        baseline_intercept * np.cos(np.deg2rad(abs(angle))) + 0.5
+        baseline.intercept * np.cos(np.deg2rad(abs(angle))) + 0.5
     )
     if angle < 0:
         baseline_val -= height_crop
 
     if trim_baseline:
-        image_crop = image_crop[:round(baseline_intercept), :]
+        image_crop = image_crop[:round(baseline_val), :]
 
     return image_crop, baseline_val

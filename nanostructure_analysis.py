@@ -81,14 +81,14 @@ for image_name in tqdm(data.file_name.unique()):
 
         # Detect surface and correct for image tilt. Skip if baseline info is
         # present in segmentation data and use that instead.
-        baseline_angle, baseline_intercept = (
+        baseline = (
             preprocess.baseline_detect(image, num_pieces=2)
             if not data_image.label.isin(['Baseline']).any()
             else preprocess.baseline_import(data_image)
         )
 
-        image_rot, baseline_val = preprocess.crop_rotate(
-            image, baseline_angle, baseline_intercept, trim_baseline=True
+        image_rot, _ = preprocess.straighten_image(
+            image, baseline, trim_baseline=True
         )
 
         if args['plot_images']:
@@ -99,7 +99,7 @@ for image_name in tqdm(data.file_name.unique()):
         for i in data_image.query("label!='Baseline'").index:
             rods = (
                 segmentation.rod_analysis(
-                    data_image.loc[i], px_size, baseline_angle, baseline_val
+                    data_image.loc[i], px_size, baseline
                 )
                 .assign(**{'file_name': image_name})
             )

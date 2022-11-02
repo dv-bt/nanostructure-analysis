@@ -35,10 +35,10 @@ def import_segmentation(
     ----------
     folder_path : str
         Path to the folder containing the files.
-    database_type : str
+    database_type : {'CVAT', 'COCO'}
         Format of segmentation mask database. Currently supported values:
-        - 'COCO': COCO 1.0 JSON
         - 'CVAT': CVAT for images 1.1
+        - 'COCO': COCO 1.0 JSON
         (default='CVAT')
 
     Returns
@@ -309,7 +309,7 @@ def __rod_volume(data: pd.DataFrame) -> np.ndarray:
 
 def rod_analysis(
     data: pd.DataFrame, px_size: float,
-    baseline_angle: float, baseline_intercept: float
+    baseline: preprocess.Baseline
 ) -> pd.DataFrame:
     """
     Extract rod skeleton and diameter for each point along it.
@@ -321,10 +321,8 @@ def rod_analysis(
         NOTE: data should contain information about a single rod.
     px_size : float
         Size of each pixel in nm.
-    baseline_angle : float
-        Angle of the surface baseline, in degrees.
-    baseline_intercept : float
-        Intercept of the surface baseline.
+    baseline : preprocess.Baseline
+        Surface baseline of the original image.
 
     Returns
     -------
@@ -338,9 +336,7 @@ def rod_analysis(
         data['segmentation']['x']
     )
     drawing[polygon] = 1
-    drawing, _ = preprocess.crop_rotate(
-        drawing, angle=baseline_angle, baseline_intercept=baseline_intercept
-    )
+    drawing, _ = preprocess.straighten_image(drawing, baseline)
 
     distance = ndimage.distance_transform_edt(drawing)
     skeleton = img_as_bool(morphology.skeletonize(drawing, method='lee'))
