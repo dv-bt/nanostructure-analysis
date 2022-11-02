@@ -59,7 +59,7 @@ for image_name in tqdm(data.file_name.unique()):
     if args['verbose']:
         print('Current image:', image_name)
 
-    results_path = RESULTS_FOLDER + image_name.replace('tif', 'csv')
+    results_path = RESULTS_FOLDER + image_name[:image_name.rfind('.')] + 'csv'
     if args['new_files'] and exists(results_path):
         continue
 
@@ -117,9 +117,7 @@ for image_name in tqdm(data.file_name.unique()):
 
         rods = pd.concat(rod_list)
         rods = rods.drop(['dist_transform'], axis=1)
-        rods.to_csv(
-            "Data/Results/" + image_name.replace('tif', 'csv'), index=False
-        )
+        rods.to_csv(results_path, index=False)
 
         if args['plot_images']:
             plt.show()
