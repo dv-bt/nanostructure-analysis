@@ -59,7 +59,7 @@ for image_name in tqdm(data.file_name.unique()):
     if args['verbose']:
         print('Current image:', image_name)
 
-    results_path = RESULTS_FOLDER + image_name[:image_name.rfind('.')] + 'csv'
+    results_path = RESULTS_FOLDER + image_name[:image_name.rfind('.')] + '.csv'
     if args['new_files'] and exists(results_path):
         continue
 
@@ -108,10 +108,10 @@ for image_name in tqdm(data.file_name.unique()):
             if args['plot_images']:
                 for _, rod in rods.groupby('instance_id'):
                     line = ax.plot(rod.x, rod.y)
-                    for i in range(0, len(rod), 10):
+                    for j in range(0, len(rod), 10):
                         ax.add_patch(mpatches.Circle(
-                            (rod.iloc[i].x, rod.iloc[i].y),
-                            rod.iloc[i].dist_transform,
+                            (rod.iloc[j].x, rod.iloc[j].y),
+                            rod.iloc[j].dist_transform,
                             color=line[0].get_color(), alpha=0.3
                         ))
 
