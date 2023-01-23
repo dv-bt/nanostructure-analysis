@@ -1,4 +1,7 @@
 # nanostructure-analysis
+
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.7560927.svg)](https://doi.org/10.5281/zenodo.7560927)
+
 A Python library for the analysis of rod-like nanostructures from SEM images.
 
 ## Usage
